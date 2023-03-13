@@ -1,5 +1,9 @@
+import logging
+from typing import List, Dict, Tuple, Optional
+
 import requests
 from controllers import asos as asos_controller
+from external_models import asos as asos_models
 from enum import Enum
 
 HEADERS = {
@@ -43,7 +47,11 @@ def fetch_countries(language: QuerystringLanguage):
     return asos_controller.add_countries(country_list, controller_language)
 
 
-def fetch_categories(store: QueryStringCountry, language: QuerystringLanguage):
+def fetch_categories(language: QuerystringLanguage):
+    if language == QuerystringLanguage.fr:
+        store = QueryStringCountry.france
+    else:
+        store = QueryStringCountry.canada
     querystring = {'lang': language.value, 'country': store.value}
     controller_language = get_controller_language(language)
     url = f'{ROOT_URL}/categories/list'
@@ -56,15 +64,75 @@ def fetch_categories(store: QueryStringCountry, language: QuerystringLanguage):
     return navigation_added and brands_added
 
 
-def fetch_product_list(store: QueryStringCountry, currency: QuerystringCurrency, language: QuerystringLanguage,
-                       category_id: str):
-    offset = 0
-    querystring = {'lang': language.value, 'country': store.value, "store": store.value, "currency": currency,
-                   "categoryId": category_id, 'offset': offset, 'limit': 100, "sort": "freshness", "sizeSchema": "US"}
+def fetch_product_list(currency: QuerystringCurrency, language: QuerystringLanguage,
+                       category_id: str, offset=0) -> Tuple[Optional[int], Optional[int]]:
+    '''
+    :param currency:
+    :param language: The store will be derived from the chosen language. Fr-FR will query the french store and en-US will query canda store
+    :param category_id:
+    :param offset: use for pagination. Number of items to skip
+    :return: the number of available items left to be downloaded
+    '''
+    print("fetch_product_list", "currency:", currency, ", language:", language, ", category_id: ", category_id,
+          ", offset:", offset)
+    try:
+        if language == QuerystringLanguage.fr:
+            store = QueryStringCountry.france
+        else:
+            store = QueryStringCountry.canada
+        querystring = {'lang': language.value, 'country': store.value, "store": store.value, "currency": currency.value,
+                       "categoryId": category_id, 'offset': offset, 'limit': 48, "sort": "freshness",
+                       "sizeSchema": "US"}
 
-    url = f"{ROOT_URL}/products/v2/list"
+        url = f"{ROOT_URL}/products/v2/list"
+        try:
+            response = requests.request("GET", url, headers=HEADERS, params=querystring)
+            if response.ok:
+                controller_language = get_controller_language(language)
+                product_list_response = response.json()
+                logging.info("product list", product_list_response)
+                if product_list_response:
+                    added = asos_controller.add_products(product_list_response, controller_language)
+                    if added:
+                        product_list = product_list_response
+                        return product_list['itemCount'], len(product_list['products'])
+                else:
+                    logging.error(f"no response from rapid api {querystring}", response.json())
+                    return None, None
+            else:
+                logging.error(f"rapid api response error: {response.request}", response.reason)
+                return None, None
+        except Exception as e:
+            logging.error(f"url: {url}, query:{querystring}", e)
+            return None, None
+    except Exception as appException:
+        logging.error(f"something wrong happened", appException)
+        return None, None
 
-    response = requests.request("GET", url, headers=HEADERS, params=querystring)
-    #TODO: the currency and sizeschema must match ( I think shoud match the store as well). Check if the params get be taken based on the provided category id
+
+def fetch_products_on_sale():
+    pass
 
 
+def fetch_product_details(product_id: int, language: QuerystringLanguage):
+    if language == QuerystringLanguage.fr:
+        store = QueryStringCountry.france
+        currency = QuerystringCurrency.EUR
+    else:
+        store = QueryStringCountry.canada
+        currency = QuerystringCurrency.USD
+    url = f'{ROOT_URL}/products/v3/detail'
+    query_string = {"id": product_id, "lang": language.value, "store": store.value, "currency": currency.value}
+
+    response = requests.request("GET", url, headers=HEADERS, params=query_string)
+
+    added = asos_controller.add_product_details(response.json(), get_controller_language(language))
+
+    return added
+
+
+def load_categories(language: QuerystringLanguage) -> Tuple[
+    List[asos_models.NavigationList], List[asos_models.BrandList]]:
+    categories = asos_controller.get_categories(get_controller_language(language))
+
+    return categories.navigation, categories.brands

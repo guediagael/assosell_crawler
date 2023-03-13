@@ -10,7 +10,7 @@ class AlternateName(BaseModel):
 class Brand(BaseModel):
     brandId: int
     name: str
-    description: str
+    description: Optional[str]
 
 
 class WebCategory(BaseModel):
@@ -32,8 +32,8 @@ class Previous(BaseModel):
 
 
 class Rrp(BaseModel):
-    value: int
-    text: str
+    value: Optional[int]
+    text: Optional[str]
     versionId: str
     conversionId: Any
 
@@ -67,7 +67,7 @@ class Variant(BaseModel):
     isInStock: bool
     isAvailable: bool
     colourWayId: int
-    colourCode: str
+    colourCode: Optional[str]
     colour: str
     price: Price
     isPrimary: bool
@@ -97,7 +97,7 @@ class Media(BaseModel):
 
 class Info(BaseModel):
     aboutMe: str
-    sizeAndFit: str
+    sizeAndFit: Optional[str]
     careInfo: str
 
 
@@ -116,8 +116,8 @@ class Previous1(BaseModel):
 
 
 class Rrp1(BaseModel):
-    value: int
-    text: str
+    value: Optional[int]
+    text: Optional[str]
     versionId: str
     conversionId: Any
 
@@ -148,7 +148,7 @@ class ProductDetailsResponse(BaseModel):
     productCode: str
     pdpLayout: str
     brand: Brand
-    sizeGuide: str
+    sizeGuide: Optional[str]
     isNoSize: bool
     isOneSize: bool
     isInStock: bool

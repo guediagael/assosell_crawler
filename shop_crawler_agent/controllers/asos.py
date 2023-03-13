@@ -35,20 +35,24 @@ def get_size_schemas(country: str) -> List[asos_models.SizeSchema]:
 
 
 def get_categories(language: Language) -> asos_models.CategoriesResponse:
-    cat_response = asos_models.CategoriesResponse()
+    cat_response_navigation = [asos_models.NavigationList(**nl) for nl in db[f'navigations_{language.value}'].find()]
+    cat_response_brands = [asos_models.BrandList(**br) for br in db[f'brands_{language.value}'].find()]
+    cat_response = {'brands': cat_response_brands, 'navigation': cat_response_navigation}
+    # cat_response = asos_models.CategoriesResponse()
 
-    cat_response.navigation = [asos_models.NavigationList(**nl) for nl in db[f'navigations_{language.value}'].find()]
-    cat_response.brands = [asos_models.NavigationList(**br) for br in db[f'brands_{language.value}'].find()]
-    return cat_response
+    # cat_response.navigation = [asos_models.NavigationList(**nl) for nl in db[f'navigations_{language.value}'].find()]
+    # cat_response.brands = [asos_models.NavigationList(**br) for br in db[f'brands_{language.value}'].find()]
+    return asos_models.CategoriesResponse(** cat_response)
 
 
-def get_items(language: Language, store: str = None, category: str = None, country: str = None, size_schema: str = None,
+def get_items(language: Language, brand_name: str = None, category: str = None, country: str = None, size_schema: str = None,
               color: str = None, page: int = 0, limit: int = 100) -> List[asos_models.Product]:
     filters = dict()
-    if store:
-        filters['brandName'] = store
+    if brand_name:
+        filters['brandName'] = brand_name
     if color:
         filters['colour'] = color
+    print(f"loading product from products_{language.value}")
     return [asos_models.Product(**product) for product in
             db[f'products_{language.value}'].find(filters).skip(page * limit)]
 
@@ -77,7 +81,6 @@ def add_product_details(product_details_response: dict, language: Language) -> b
     added = False
     if product_details:
         added = db[f'product_details_{language.value}'].insert_one(product_details.dict())
-
     return added
 
 
