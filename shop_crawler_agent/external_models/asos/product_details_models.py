@@ -96,9 +96,9 @@ class Media(BaseModel):
 
 
 class Info(BaseModel):
-    aboutMe: str
+    aboutMe: Optional[str]
     sizeAndFit: Optional[str]
-    careInfo: str
+    careInfo: Optional[str]
 
 
 class Current1(BaseModel):

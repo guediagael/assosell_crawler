@@ -65,7 +65,7 @@ def fetch_categories(language: QuerystringLanguage):
 
 
 def fetch_product_list(currency: QuerystringCurrency, language: QuerystringLanguage,
-                       category_id: str, offset=0) -> Tuple[Optional[int], Optional[int]]:
+                       category_id: int, offset=0) -> Tuple[Optional[int], Optional[int]]:
     '''
     :param currency:
     :param language: The store will be derived from the chosen language. Fr-FR will query the french store and en-US will query canda store
@@ -73,8 +73,6 @@ def fetch_product_list(currency: QuerystringCurrency, language: QuerystringLangu
     :param offset: use for pagination. Number of items to skip
     :return: the number of available items left to be downloaded
     '''
-    print("fetch_product_list", "currency:", currency, ", language:", language, ", category_id: ", category_id,
-          ", offset:", offset)
     try:
         if language == QuerystringLanguage.fr:
             store = QueryStringCountry.france
@@ -90,8 +88,9 @@ def fetch_product_list(currency: QuerystringCurrency, language: QuerystringLangu
             if response.ok:
                 controller_language = get_controller_language(language)
                 product_list_response = response.json()
-                logging.info("product list", product_list_response)
                 if product_list_response:
+                    added_categories = asos_controller.add_product_categories(product_list_response,
+                                                                              controller_language)
                     added = asos_controller.add_products(product_list_response, controller_language)
                     if added:
                         product_list = product_list_response

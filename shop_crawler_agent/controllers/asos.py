@@ -1,9 +1,13 @@
 from typing import List
 from external_models import asos as asos_models
-from pymongo import MongoClient
+from pymongo import ReplaceOne
+from pymongo.database import Database
 from enum import Enum
+import itertools
 
-db: MongoClient
+db: Database
+collections = ['brands_en', 'brands_fr', 'countries_en', 'countries_fr', 'navigations_fr', 'navigations_en',
+               'product_details_en', 'product_details_fr', 'products_en', 'products_fr']
 
 
 class Language(Enum):
@@ -11,7 +15,7 @@ class Language(Enum):
     english = 'en'
 
 
-def init(database: MongoClient):
+def init(database: Database):
     global db
     db = database
 
@@ -42,10 +46,11 @@ def get_categories(language: Language) -> asos_models.CategoriesResponse:
 
     # cat_response.navigation = [asos_models.NavigationList(**nl) for nl in db[f'navigations_{language.value}'].find()]
     # cat_response.brands = [asos_models.NavigationList(**br) for br in db[f'brands_{language.value}'].find()]
-    return asos_models.CategoriesResponse(** cat_response)
+    return asos_models.CategoriesResponse(**cat_response)
 
 
-def get_items(language: Language, brand_name: str = None, category: str = None, country: str = None, size_schema: str = None,
+def get_items(language: Language, brand_name: str = None, category: str = None, country: str = None,
+              size_schema: str = None,
               color: str = None, page: int = 0, limit: int = 100) -> List[asos_models.Product]:
     filters = dict()
     if brand_name:
@@ -57,11 +62,11 @@ def get_items(language: Language, brand_name: str = None, category: str = None, 
             db[f'products_{language.value}'].find(filters).skip(page * limit)]
 
 
-def get_product(language: Language, product_id: str) -> asos_models.Product:
+def get_product(language: Language, product_id: int) -> asos_models.Product:
     return asos_models.Product(**db[f'products_{language.value}'].find_one({'id': product_id}))
 
 
-def get_product_details(language: Language, product_id: str) -> asos_models.ProductDetailsResponse:
+def get_product_details(language: Language, product_id: int) -> asos_models.ProductDetailsResponse:
     return asos_models.ProductDetailsResponse(**db[f'product_details_{language.value}'].find_one({'id': product_id}))
 
 
@@ -70,9 +75,25 @@ def add_products(products: dict, language: Language) -> bool:
     products = product_list_response.products
     added = False
     if products and len(products) > 0:
-        added = db[f'products_{language.value}'].insert_many(
-            [product.dict() for product in product_list_response.products])
+        operations = [ReplaceOne({"id": product.id}, product.dict(), upsert=True) for product in
+                      product_list_response.products]
+        # added = db[f'products_{language.value}'].insert_many(
+        #     [product.dict() for product in product_list_response.products])
+        added = db[f'products_{language.value}'].bulk_write(operations)
 
+    return added
+
+
+def add_product_categories(products_response: dict, language: Language) -> bool:
+    products_response = asos_models.ProductListResponse(**products_response)
+    added = False
+    facets = products_response.facets if products_response is not None else []
+    if len(facets) > 0 and any(facet.name == "Product Type" for facet in facets):
+        product_types = [facet.facetValues for facet in facets if facet.name == "Product Type"]
+        product_types = list(itertools.chain(*product_types))
+        operations = [ReplaceOne({"id": facet_value.id}, facet_value.dict(), upsert=True) for facet_value in
+                      product_types]
+        added = db[f'categories_{language.value}'].bulk_write(operations)
     return added
 
 
@@ -80,16 +101,20 @@ def add_product_details(product_details_response: dict, language: Language) -> b
     product_details = asos_models.ProductDetailsResponse(**product_details_response)
     added = False
     if product_details:
-        added = db[f'product_details_{language.value}'].insert_one(product_details.dict())
+        added = db[f'product_details_{language.value}'].replace_one({"id": product_details.id}, product_details.dict(),
+                                                                    upsert=True)
     return added
 
 
-def add_countries(countries_response: dict, language: Language) -> bool:
+def add_countries(countries_response: list, language: Language) -> bool:
     country_list_response: List[asos_models.CountryListItem] = [asos_models.CountryListItem(**country) for country in
                                                                 countries_response]
     added = False
     if country_list_response and len(country_list_response) > 0:
-        added = db[f'countries_{language.value}'].insert_many([country.dict() for country in country_list_response])
+        operations = [ReplaceOne({"country": country.country}, country.dict(), upsert=True) for country in
+                      country_list_response]
+        # added = db[f'countries_{language.value}'].insert_many([country.dict() for country in country_list_response])
+        added = db[f'countries_{language.value}'].bulk_write(operations)
 
     return added
 
@@ -98,7 +123,9 @@ def add_navigation_categories(language: Language, navigation_categories: List) -
     categories: List[asos_models.NavigationList] = [asos_models.NavigationList(**cat) for cat in navigation_categories]
     added = False
     if categories and len(categories) > 0:
-        added = db[f'navigations_{language.value}'].insert_many([category.dict() for category in categories])
+        operations = [ReplaceOne({"id": category.id}, category.dict(), upsert=True) for category in categories]
+        # added = db[f'navigations_{language.value}'].insert_many([category.dict() for category in categories])
+        added = db[f'navigations_{language.value}'].bulk_write(operations)
     return added
 
 
@@ -107,6 +134,10 @@ def add_brands_categories(language: Language, brand_categories: List) -> bool:
 
     added = False
     if categories and len(categories) > 0:
-        added = db[f'brands_{language.value}'].insert_many([category.dict() for category in categories])
+        operations = [
+            ReplaceOne({"$or": [{"id": category.id}, {'content.title': category.content.title}]}, category.dict(),
+                       upsert=True) for category in categories]
+        # added = db[f'brands_{language.value}'].insert_many([category.dict() for category in categories])
+        added = db[f'brands_{language.value}'].bulk_write(operations)
 
     return added

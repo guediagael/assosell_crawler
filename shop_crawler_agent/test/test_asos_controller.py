@@ -50,6 +50,11 @@ class TestAsosController(unittest.TestCase):
         self.assertTrue(
             asos_controllers.add_products(products=self.product_list, language=asos_controllers.Language.english))
 
+    def test_add_product_categories(self):
+        self.collections.append(f'categories_{asos_controllers.Language.english.value}')
+        self.assertTrue(asos_controllers.add_product_categories(products_response=self.product_list,
+                                                                language=asos_controllers.Language.english))
+
     def test_add_product_details(self):
         self.collections.append(f'product_details_{asos_controllers.Language.english.value}')
         self.assertTrue(asos_controllers.add_product_details(self.product_details, asos_controllers.Language.english))
